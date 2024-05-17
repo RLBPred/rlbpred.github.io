@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <title>General Information</title>
+    <style>
+        body {
+            background-image: url('background.jpg');
+            background-size: cover;
+            /* 以尽可能小的大小将背景图像展示 */
+            background-repeat: no-repeat;
+            /* 防止背景图像重复 */
+        }
+
+        .title {
+            position: relative;
+            /*设置绝对定位 */
+            top: 0.5%;
+            /* 距离页面顶部 5% */
+            margin: auto;
+            /* 水平居中 */
+            /*z-index: 1;  设置层级，确保标题图在背景图之上 */
+        }
+
+        .title img {
+            transform: scale(0.45);
+            /* 将图像缩小到原始大小的 10% */
+        }
+
+        /* 添加CSS样式 */
+        table.boxTable {
+            font-family: 'Courier New', Courier, monospace;
+            font-size: 11px;
+            color: #000000;
+            background-color: rgba(255, 255, 255, 0);
+            ;
+            border: 1px solid #000000;
+            margin-bottom: 10px;
+        }
+
+        pre,
+        td {
+            font-family: 'Courier New', Courier, monospace;
+            font-size: 15px;
+            padding: 3px;
+            text-align: left;
+            height: 10%
+        }
+
+        pre .th .secondtitle {
+            font-family: 'Courier New', Courier, monospace;
+            font-size: 40px;
+            text-align: left;
+            height: 5%
+        }
+
+        td.ID {
+            background-color: #88ba8b;
+        }
+
+        .custom-row {
+            height: 200px;
+            /* 设置行的高度为 200px */
+        }
+
+        .wrap {
+            white-space: pre-wrap;
+            /* 或者 use 'break-spaces' */
+            word-wrap: break-word;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="title">
+        <img src="title.jpg" alt="Title Image">
+    </div>
+    <pre id="accessionValue">The protein you are searching for is: <span>loading...</span></pre>
+    <pre id="searchContent"></pre>
+    <table class="boxTable" width="100%" border="1" bgcolor="#ffffff" cellpadding="8" cellspacing="0">
+        <tr>
+            <td>The Binding Probability is:</td>
+        </tr>
+    </table><br>
+    <div class="boxTable" id="myTableContainer"></div>
+
+    <script>
+        //<pre id="fileContent"></pre>
+        document.addEventListener('DOMContentLoaded', function () {
+            fetch('output1.json')
+                .then(response => response.json())
+                .then(data => {
+                    //document.getElementsByClassName('boxTable')[0].remove()
+                    //document.getElementById('fileContent').textContent = data;
+                    var urlParams = new URLSearchParams(window.location.search);
+                    var accession = urlParams.get('accession');
+
+                    // 如果accession参数存在，则打印到页面上
+                    if (accession) {
+                        document.getElementById('accessionValue').innerHTML = `The protein you are searching for is: ${accession}`;
+                    } else {
+                        document.getElementById('accessionValue').innerHTML = 'Accession parameter not provided.';
+                    }
+                    if (accession) {
+                        // 使用正则表达式匹配以~~~开头和结尾，包含accession的段落
+                        var match = findMatchByAccession_json(data, accession);
+                        if (match) {
+                            // 如果找到匹配的段落，则打印该段落
+                            //document.getElementById('searchContent').textContent = match;
+                            const htmlTable = generateHtmlTable_json(match);
+                            document.getElementById('myTableContainer').innerHTML = htmlTable;
+                        } else {
+                            // 如果没有找到，给出提示信息
+                            document.getElementById('searchContent').textContent = 'No information found for the given accession.';
+                        }
+                    }
+
+                })
+                .catch(error => {
+                    console.error('Error fetching file:', error);
+                });
+        });
+
+        function findMatchByAccession_json(data, accession) {
+            for (var i of data) {
+                flag = i['UniProtKB ID'] == accession
+                flag = flag || i['UniProtKB Accession'] == accession
+                flag = flag || i['GenPept'] == accession
+                flag = flag || i['Protein Name'] == accession
+                if (i['RefSeq']) {
+                    flag = flag || i['RefSeq'].includes(accession)
+                }
+                if (flag) {
+                    return i
+                }
+            }
+        }
+
+        function findMatchByAccession(data, accession) {
+            // 使用~~~~作为分隔符将数据分割成一个列表
+            var sections = data.split('~~~');
+
+            // 遍历列表，寻找包含指定accession的元素
+            for (var i = 0; i < sections.length; i++) {
+                if (sections[i].includes(accession)) {
+                    // 如果找到匹配的段落，返回该段落
+                    return sections[i];
+                }
+            }
+        }
+
+        function generateHtmlTable_json(match) {
+            let htmlContent = '<table id="res_table" class="boxTable" width="100%" border="1" bgcolor="#ffffff" cellpadding="8" cellspacing="0">';
+            let formattedSequence = ''; // 初始化格式化后的序列字符串
+            for (const [key, value] of Object.entries(match)) {
+                if (key != 'seq') {
+                    htmlContent += `
+                        <tr>
+                            <td class="ID" width="20%">${key}</td>
+                            <td class="content wrap" width="80%">${value}</td>
+                        </tr>
+                    `;
+                }
+            }
+            htmlContent += `
+        <tr class="custom-row">
+            <td class="ID" width="20%">Sequence</td>
+            <td>`;
+            htmlContent += match['seq'].replaceAll('\n', '<br>');
+            htmlContent += `</td></tr></table>`;
+            return htmlContent;
+        }
+
+
+        function generateHtmlTable(match) {
+            // 使用正则表达式按行分割文本，同时匹配冒号及其前面的空格
+            const rows = match.split('\n');
+            let htmlContent = '<table class="boxTable" width="100%" border="1" bgcolor="#ffffff" cellpadding="8" cellspacing="0">';
+            let sequenceList = []; // 初始化序列列表
+            let formattedSequence = ''; // 初始化格式化后的序列字符串
+
+            // 遍历每一行，创建HTML表格行
+            for (const row of rows) {
+                if (!row.startsWith('Sequence:')) {
+                    // 使用正则表达式匹配每一行的ID和Content
+                    const match = row.match(/(.+?):(.+)/);
+                    if (match) {
+                        // 捕获组1是ID，捕获组2是Content
+                        const id = match[1].trim();
+                        const content = match[2].trim();
+                        htmlContent += `
+                        <tr>
+                            <td class="ID" width="20%">${id}</td>
+                            <td class="content wrap" width="80%">${content}</td>
+                        </tr>
+                    `;
+                    }
+                }
+            }
+            htmlContent += `
+        <tr class="custom-row">
+            <td class="ID" width="20%">Sequence</td>
+            <td>`;
+            for (const row of rows) {
+                if (row.startsWith('Sequence:')) {
+                    const sequenceText = row.replace('Sequence: ', '');
+                    const sequenceLink = `<a >${sequenceText}</a>`;
+                    sequenceList.push(sequenceLink); // 将序列行添加到列表中
+                }
+            }
+
+
+
+            // 生成包含序列信息的表格行，并将格式化后的序列信息放置在一个<td>标签中
+            htmlContent += sequenceList.join('<br>') + `</td></tr>`;
+
+            // 结束HTML表格
+            htmlContent += '</table>';
+
+            // 返回完整的HTML表格字符串
+            return htmlContent;
+        }
+
+    </script>
+
+</body>
+
+</html>
